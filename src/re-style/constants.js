@@ -2,7 +2,12 @@ export const INVALID_SHORT_HAND_PROPERTIES = {
   margin: true,
   padding: true,
   border: true,
-  background: true
+  background: true,
+  borderColor: true,
+  borderStyle: true,
+  borderWidth: true,
+  overflow: true,
+  overscollBehavior: true
 };
 
 export const BREAKPOINTS = {
