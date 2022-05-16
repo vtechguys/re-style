@@ -1,20 +1,67 @@
-import {
-  isNill,
-  isString,
-  createObject,
-  isObject,
-  tail,
-  merge,
-  toHyphenCase
-} from "./utils";
-import { INVALID_SHORT_HAND_PROPERTIES } from "./constants";
+/** common utils */
+export const isObject = (v) => v && typeof v === "object";
+export const isArray = (v) => Array.isArray(v);
+export const isMergeableObject = (v) => isObject(v) && !isArray(v);
+export const isString = (v) => typeof v === "string";
+export const isUndefined = (v) => typeof v === "undefined";
+export const isNull = (v) => v === null;
+export const isNill = (v) => isUndefined(v) || isNull(v);
+export const toLowerCase = (v) => v.toLowerCase();
+const toHyphenCase = (v) =>
+  v.replace(/[A-Z]/g, (letter) => `-${toLowerCase(letter)}`);
+const replaceOnlySpaces = (str) => str.replace(/  +/g, " ");
+const tail = (str) => replaceOnlySpaces(str.trim());
+const createObject = () => Object.create(null);
+// unoptimised
+const merge = (target, ...sources) => {
+  if (!sources.length) return target;
+  const source = sources.shift();
 
-/** style sheet  */
-let _id_;
-let uid = 1;
-let _breakpoints_ = createObject();
+  if (isMergeableObject(target) && isMergeableObject(source)) {
+    for (const key in source) {
+      if (isMergeableObject(source[key])) {
+        if (!target[key])
+          Object.assign(target, {
+            [key]: {}
+          });
+        merge(target[key], source[key]);
+      } else {
+        Object.assign(target, {
+          [key]: source[key]
+        });
+      }
+    }
+  }
 
-const cache = new Map();
+  return merge(target, ...sources);
+};
+/** constants */
+export const INVALID_SHORT_HAND_PROPERTIES = {
+  margin: true,
+  padding: true,
+  border: true,
+  background: true,
+  borderColor: true,
+  borderStyle: true,
+  borderWidth: true,
+  overflow: true,
+  overscollBehavior: true
+};
+
+export const BREAKPOINTS = {
+  xs: "@media only screen and (max-width: 425px)",
+  sm: "@media only screen and (min-width: 425px)",
+  md: "@media only screen and (min-width: 768px)",
+  lg: "@media only screen and (min-width: 920px)",
+  xl: "@media only screen and (min-width: 1200px)",
+  xxl: "@media only screen and (min-width: 1400px)"
+};
+
+export const STYLESHEET_ID = "re-style";
+
+/**
+ * StyleSheet utils.js
+ */
 
 const getStyleElement = (id) => {
   let element = document.getElementById(id);
@@ -28,6 +75,8 @@ const getStyleElement = (id) => {
   return element;
 };
 
+// records the styles which has been pushed into the style-tag/stylesheet
+const cache = new Map();
 const makeRule = (selector, css_prop, value, breakpoint) => {
   const _baseRule_ = `${selector} { ${css_prop}: ${value}; } \n`;
   let rule = _baseRule_;
@@ -48,13 +97,9 @@ const injectIntoStyleSheet = (
   value,
   breakpoint
 ) => {
-  const _base_rule_ = makeRule(`.${className}`, cssProp, value, breakpoint);
   if (!shouldInjectIntoStyleSheet(element, className)) {
-    if (_breakpoints_[breakpoint]) {
-      element.innerHTML += `${_breakpoints_[breakpoint]} { ${_base_rule_} }`;
-    } else {
-      element.innerHTML += _base_rule_;
-    }
+    const _base_rule_ = makeRule(`.${className}`, cssProp, value, breakpoint);
+    element.innerHTML += _base_rule_;
     cache.set(className, true);
   }
 };
@@ -63,7 +108,6 @@ const injectIntoStyleSheet = (
 // uid may lead to conflict dynamically loaded modules
 const getClassName = (prop, value, breakpoint) =>
   `${breakpoint ? `${breakpoint}_` : ""}${prop}--${uid++}`;
-
 const validateCSSPropValue = (prop, value) => {
   if (INVALID_SHORT_HAND_PROPERTIES[prop]) {
     console.error(`Shorthand property "${prop}" is not valid.`);
@@ -75,7 +119,12 @@ const validateCSSPropValue = (prop, value) => {
   }
 };
 
-const createRegistry = (name) => {
+let _id_;
+let uid = 1;
+const empty_object = createObject();
+let _breakpoints_ = createObject();
+
+const createRegistry = () => {
   // records all styles
   const global_registry = createObject();
   // for each breakpoint we have separate stylesheet
@@ -90,7 +139,12 @@ const createRegistry = (name) => {
   }
 
   // registry instance methods
+
+  // for the style object make entry for each style property in registery
+  // and insert into sytle-tags. each property is converted and inserted
+  // as atomic class in style sheet
   const set = (style) => {
+    let out = style || empty_object;
     // style are required to be objects
     // { [css_prop]: value }
     // { color: 'red' }
@@ -154,13 +208,14 @@ const createRegistry = (name) => {
                 getStyleElement(`${breakpoint}:${_id_}`),
                 propVariantMap[breakpointValue],
                 css_prop,
-                breakpointValue
+                breakpointValue,
+                breakpoint
               );
             }
           }
         } else {
-          // record variants of this css_prop
-
+          // prop has primitive value
+          // record this value as a variant of this css_prop
           let propVariantMap = global_registry.global[css_prop];
           // register variant to stylesheet
           if (isNill(global_registry.global[css_prop])) {
@@ -180,8 +235,9 @@ const createRegistry = (name) => {
         }
       }
     }
+    return out;
   };
-
+  // gets atomic classnames for style object
   const get = (style) => {
     let className = "";
 
@@ -234,13 +290,6 @@ const createRegistry = (name) => {
 
   const getRegistry = () => global_registry;
 
-  // set global_registry as global
-  // update global_registry if required
-  if (isObject(window)) {
-    const as = `__${name}__`;
-    window[as] = merge(global_registry, window[as]);
-  }
-
   return {
     set,
     get,
@@ -248,26 +297,35 @@ const createRegistry = (name) => {
   };
 };
 
-/// MAIN
-export const init = ({ breakpoints, id }) => {
+/// create re-style instance
+export const createInstance = (config) => {
   // initialize breakpoints and id
-  _breakpoints_ = breakpoints;
-  _id_ = id;
+  _breakpoints_ = config.breakpoints;
+  _id_ = config.id;
   // create breakpoint specific stylesheet
   // this could be used to import css dynamically
+  // as <link media="breakpoints" />
   for (const breakpoint in _breakpoints_) {
     if (Object.prototype.hasOwnProperty.call(breakpoint, _breakpoints_)) {
       getStyleElement(`${breakpoint}:${_id_}`);
     }
   }
+  // create style registery
+  const StyleRegistry = createRegistry("StyleRegistry");
 
   if (isObject(window)) {
-    window[`__${id}__`] = cache;
+    const as = `__${config.id}_STYLE_REGISTRY__`;
+    // can this merging break for dynamic loaded modules ??
+    window[as] = merge(window[as], StyleRegistry.getRegistry());
   }
 
-  const StyleRegistry = createRegistry("StyleRegistry");
-  // get a style sheet object { [className]: { color: 'red' } }
+  if (isObject(window)) {
+    const as = `__${config.id}_CACHE__`;
+    // can this merging break for dynamic loaded modules ??
+    window[as] = merge(window[as], cache);
+  }
 
+  // gets a style sheet object { [className]: { color: 'red' } }
   const create = (stylesheet) => {
     // traverse over the classes
     // and create classname for each css property
@@ -279,17 +337,26 @@ export const init = ({ breakpoints, id }) => {
 
     return stylesheet;
   };
-
+  // compiles all style objects into one
+  // gets classnames for compiled style object
   const resolve = (...styles) => {
-    const merged_styles = merge(...styles);
-    return StyleRegistry.get(merged_styles);
+    let style;
+    if (styles.length === 1) {
+      style = styles[0];
+    } else {
+      style = merge(createObject(), ...styles);
+    }
+    StyleRegistry.set(style);
+    return StyleRegistry.get(style);
   };
 
+  // StyleSheet utils
   const StyleSheet = {
     create,
     resolve
   };
 
+  // instance
   return {
     StyleSheet,
     StyleRegistry

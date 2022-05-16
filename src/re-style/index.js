@@ -1,10 +1,14 @@
-import { init } from "./StyleSheet";
-import { BREAKPOINTS, STYLESHEET_ID } from "./constants";
+import { createInstance, BREAKPOINTS, STYLESHEET_ID } from "./StyleSheet";
 
-const { StyleSheet, StyleRegistry } = init({
+const { StyleSheet, StyleRegistry } = createInstance({
   breakpoints: BREAKPOINTS,
   id: STYLESHEET_ID
 });
 
-export { BREAKPOINTS, STYLESHEET_ID } from "./constants";
-export { StyleSheet, StyleRegistry, init };
+export {
+  StyleSheet,
+  StyleRegistry,
+  createInstance,
+  BREAKPOINTS,
+  STYLESHEET_ID
+};
