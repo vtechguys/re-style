@@ -1,16 +1,14 @@
-import { StrictMode } from "react";
-import { createRoot } from "react-dom/client";
-import { BrowserRouter } from "react-router-dom";
+import { createInstance, BREAKPOINTS, STYLESHEET_ID } from "./StyleSheet";
 
-import App from "./App";
+const { StyleSheet, StyleRegistry } = createInstance({
+  breakpoints: BREAKPOINTS,
+  id: STYLESHEET_ID
+});
 
-const rootElement = document.getElementById("root");
-const root = createRoot(rootElement);
-
-root.render(
-  <StrictMode>
-    <BrowserRouter>
-      <App />
-    </BrowserRouter>
-  </StrictMode>
-);
+export {
+  StyleSheet,
+  StyleRegistry,
+  createInstance,
+  BREAKPOINTS,
+  STYLESHEET_ID
+};
